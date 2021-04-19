@@ -130,7 +130,6 @@ class net_model(object):
                 else:
                     _, step = sess.run( [self.optimizer, self.global_step],feed_dict={self.x_input: xs, self.y_input: ys})# 优化参数
             train_writer.close()
-
     def _define_graph(self):
         """ 定义一个计算图"""
         # 定义计算图的输入结构

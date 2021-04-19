@@ -7,6 +7,8 @@
 @ref:
 @blog: https://blog.csdn.net/qq_41959920
 '''''''''
+import random
+
 import matplotlib.pyplot as plt
 from tensorflow.examples.tutorials.mnist import input_data
 
@@ -45,5 +47,7 @@ if __name__=='__main__':
     # 获取数据集
     mnist = input_data.read_data_sets('./mnist/', one_hot=False)
     # 获取训练的一些数据并且进行显示
-    images, cls_true = mnist.train.images, mnist.train.labels
-    plot_images(images=images, cls_true=cls_true,img_size=28,num_channels=1)
+    _images, _labels = mnist.train.images, mnist.train.labels
+    random_indices = random.sample(range(len(_images)), min(len(_images), 9))
+    images, labels = zip(*[(_images[i], _labels[i]) for i in random_indices])
+    plot_images(images=images, cls_true=labels,img_size=28,num_channels=1)
