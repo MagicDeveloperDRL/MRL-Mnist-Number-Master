@@ -17,7 +17,6 @@ def plot_images(images, cls_true, img_size=28, cls_pred=None, num_channels=1):
     if len(images) <= 0 or len(images)>9:
         print("没有图像来展示或者图像个数过多")
         return
-
     # 创造一个3行3列的画布
     fig, axes = plt.subplots(3, 3)
     fig.subplots_adjust(hspace=0.6, wspace=0.6)
@@ -46,8 +45,16 @@ def plot_images(images, cls_true, img_size=28, cls_pred=None, num_channels=1):
 if __name__=='__main__':
     # 获取数据集
     mnist = input_data.read_data_sets('./mnist/', one_hot=False)
-    # 获取训练的一些数据并且进行显示
+    # 获取各个数据集的样本数量
+    n1 = mnist.train.num_examples
+    n2 = mnist.validation.num_examples
+    n3 = mnist.test.num_examples
+    # 取出32个样本
+    xs, ys = mnist.train.next_batch(32)
+    # 获取训练集的图片数据和标签
     _images, _labels = mnist.train.images, mnist.train.labels
+    # 随机抽取9个数据样本
     random_indices = random.sample(range(len(_images)), min(len(_images), 9))
     images, labels = zip(*[(_images[i], _labels[i]) for i in random_indices])
+    # 可视化样本
     plot_images(images=images, cls_true=labels,img_size=28,num_channels=1)
