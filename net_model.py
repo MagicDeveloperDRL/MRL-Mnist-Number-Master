@@ -52,12 +52,11 @@ class net_model(object):
         self.model_name = MODEL_NAME
     def test_accuracy(self,_images,_labels):
         with tf.Graph().as_default() as g:
-            x = tf.placeholder(tf.float32, [None, self.n_input], name='x-input')
-            y_ = tf.placeholder(tf.float32, [None, self.n_output], name='y-input')
-            validate_feed = {x: _images, y_: _labels}
-            y = self._define_net(x, regularizer__function=None, is_historgram=False)
+            x_input = tf.placeholder(tf.float32, [None, self.n_input], name='x-input')
+            y_input = tf.placeholder(tf.float32, [None, self.n_output], name='y-input')
+            output = self._define_net(x_input, regularizer__function=None, is_historgram=False)
             # 计算准确率
-            correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
+            correct_prediction = tf.equal(tf.argmax(output, 1), tf.argmax(y_input, 1))
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
             # 滑动平均模型变量
             variables_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY)  # 定义一个滑动平均类
@@ -69,7 +68,7 @@ class net_model(object):
                 if ckpt and ckpt.model_checkpoint_path:
                     saver.restore(sess, ckpt.model_checkpoint_path)  # ckpt.model_checkpoint_path保存了最新次数的模型文件路径
                     global_step = ckpt.model_checkpoint_path.split('/')[-1].split('-')[-1]  # 获取训练次数
-                    accuracy_score = sess.run(accuracy, feed_dict=validate_feed)  # 运行计算图，获取准确率
+                    accuracy_score = sess.run(accuracy, feed_dict={x_input: _images,y_input: _labels})  # 运行计算图，获取准确率
                     print('After %s training step(s), accuracy on validation  is %g.' % (global_step, accuracy_score))
                 else:
                     print('No checkpoint file found')
@@ -78,11 +77,16 @@ class net_model(object):
         # 随机挑选9个照片
         random_indices = random.sample(range(len(_images)), min(len(_images), 9))
         images, labels = zip(*[(_images[i], _labels[i]) for i in random_indices])
+        # 加载模型
+        pred = self._run_saved_model(images,labels)
+        if pred is not None:
+            datahelpter.plot_images(images=images, cls_true=np.argmax(labels, 1), cls_pred=np.argmax(pred, 1),img_size=28, num_channels=1)
+    def _run_saved_model(self,images,labels):
+        # 加载模型
         with tf.Graph().as_default() as g:
-            x = tf.placeholder(tf.float32, [None, self.n_input], name='x-input')
-            y_ = tf.placeholder(tf.float32, [None, self.n_output], name='y-input')
-            validate_feed = {x: images,y_: labels}
-            y = self._define_net(x, regularizer__function=None, is_historgram=False)
+            x_input = tf.placeholder(tf.float32, [None, self.n_input], name='x-input')
+            y_input = tf.placeholder(tf.float32, [None, self.n_output], name='y-input')
+            output = self._define_net(x_input, regularizer__function=None, is_historgram=False)
             # 滑动平均变量
             variables_averages = tf.train.ExponentialMovingAverage(MOVING_AVERAGE_DECAY)  # 定义一个滑动平均类
             variables_to_restore = variables_averages.variables_to_restore()  # 生成变量重命名的列表
@@ -92,12 +96,12 @@ class net_model(object):
                 ckpt = tf.train.get_checkpoint_state(self.model_save_path)  # 获取ckpt的模型文件的路径
                 if ckpt and ckpt.model_checkpoint_path:
                     saver.restore(sess, ckpt.model_checkpoint_path)  # 恢复模型参数
-                    pred = sess.run(y, feed_dict=validate_feed)  # 运行计算图，获取准确率
-                    datahelpter.plot_images(images=images, cls_true=np.argmax(labels, 1), cls_pred=np.argmax(pred, 1),img_size=28,num_channels=1)
+                    pred = sess.run(output, feed_dict= {x_input: images, y_input: labels})  # 运行计算图，获取准确率
+                    return pred
+
                 else:
                     print('No checkpoint file found')
-                    return
-
+                    return None
 
     def train(self,train):
         """ 训练一个计算图模型"""
@@ -114,11 +118,11 @@ class net_model(object):
                 if i % 1000 == 0:
                     saver.save(sess, os.path.join(self.model_save_path, self.model_name), global_step=self.global_step)  # 保存cnpk模型
                     # 执行优化器、损失值和step
-                    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-                    run_metadata = tf.RunMetadata()
+                    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)#配置运行时需要记录的信息
+                    run_metadata = tf.RunMetadata()#运行时记录运行信息的proto
                     _, loss_value, step = sess.run([self.optimizer, self.loss, self.global_step], feed_dict={self.x_input: xs, self.y_input: ys},
                                                    options=run_options, run_metadata=run_metadata)
-                    train_writer.add_run_metadata(run_metadata, 'step%03d' % i) # 添加到meta中来保存信息
+                    train_writer.add_run_metadata(run_metadata, 'step%03d' % i) # #将节点在运行时的信息写入日志文件
                     print('Epoich: %d , loss: %g. and save model successfully' % (step, loss_value))
                 # 定期打印信息和记录变量
                 elif i % 10 == 0:
@@ -128,7 +132,7 @@ class net_model(object):
                     print('Epoich: %d , loss: %g.' % (step, loss_value))
                     train_writer.add_summary(summary, i) # 添加到graph event文件中用于TensorBoard的显示
                 else:
-                    _, step = sess.run( [self.optimizer, self.global_step],feed_dict={self.x_input: xs, self.y_input: ys})# 优化参数
+                    _ = sess.run( [self.optimizer],feed_dict={self.x_input: xs, self.y_input: ys})# 优化参数
             train_writer.close()
     def _define_graph(self):
         """ 定义一个计算图"""
@@ -169,11 +173,11 @@ class net_model(object):
         # 定义计算图的优化器
         with tf.name_scope('optimizer'):
             # 定义优化器
-            train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss,global_step=self.global_step)
+            train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(self.loss,global_step=self.global_step)# 自动给global_step+1
             self.optimizer = tf.group(train_step, variable_averages_op)
         # 查看所有的变量
-        for v in tf.global_variables():
-            print(v.name)
+        #for v in tf.global_variables():
+           # print(v.name)
     def _define_net(self, input,regularizer__function=None,is_historgram=True):
         """ 定义一个全连接神经网络"""
         # 定义layer1层
@@ -192,8 +196,7 @@ class net_model(object):
                                     activation_function=None,
                                     regularizer__function=regularizer__function,
                                     is_historgram=is_historgram)  # 预测值
-        #output.name = "output"
-        print(output.name)
+        #print(output.name)
         return output
     def _define_layer(self,inputs, in_size, out_size, index_layer, activation_function=None,regularizer__function=None,is_historgram=True):
         """ 定义一个全连接神经层"""
